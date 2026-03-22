@@ -178,7 +178,8 @@ class LLMRouter:
                         exc,
                     )
                     if attempt < self._max_retries - 1:
-                        # Exponential back-off with full jitter.
+                        # Full-jitter exponential back-off: wait = base * 2^attempt * U(0.5, 1.0)
+                        # Using [0.5, 1.0) ensures at least half the exponential delay is kept.
                         wait = self._retry_base * (2**attempt) * (
                             0.5 + random.random() * 0.5
                         )
@@ -200,6 +201,6 @@ class LLMRouter:
             cb.record_failure()
 
         raise LLMUnavailableError(
-            "All LLM providers are currently unavailable.  "
+            "All LLM providers are currently unavailable. "
             "Please try again later."
         ) from last_error

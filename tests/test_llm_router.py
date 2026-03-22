@@ -284,7 +284,7 @@ class TestCircuitBreakerIntegration:
         # p1 will always raise retryable errors.
         p1 = _MockProvider(
             "p1",
-            side_effects=[RetryableError("err")] * 10,
+            side_effects=[RetryableError("err") for _ in range(10)],
         )
         p2 = _MockProvider("p2", responses=["from p2"])
         with patch.dict(

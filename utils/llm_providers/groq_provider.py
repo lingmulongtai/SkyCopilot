@@ -62,6 +62,8 @@ class GroqProvider(LLMProvider):
         }
 
         try:
+            # A new session is created per request.  For a low-throughput Discord
+            # bot this is acceptable and avoids async lifecycle management.
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     _API_URL,

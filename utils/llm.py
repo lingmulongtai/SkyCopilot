@@ -84,7 +84,7 @@ async def ask_llm(
     user_message: str,
     stats_context: str,
     *,
-    model: str | None = None,  # kept for backward compatibility; use OPENAI_MODEL env var
+    model: str | None = None,  # kept for backward compatibility; ignored (set OPENAI_MODEL instead)
     max_tokens: int = 1024,
 ) -> str:
     """Send *user_message* plus *stats_context* to the LLM and return the reply.
@@ -96,8 +96,9 @@ async def ask_llm(
     stats_context:
         A formatted block describing the player's current Skyblock stats.
     model:
-        Accepted for backward compatibility.  Set ``OPENAI_MODEL`` (or the
-        equivalent env var for other providers) to control the model instead.
+        Accepted for backward compatibility but **ignored**.
+        To control the model, set the ``OPENAI_MODEL`` / ``GEMINI_MODEL`` /
+        ``GROQ_MODEL`` environment variables instead.
     max_tokens:
         Maximum tokens for the completion response.
 
