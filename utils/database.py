@@ -62,3 +62,13 @@ def get_user(discord_id: str) -> sqlite3.Row | None:
         return conn.execute(
             "SELECT * FROM users WHERE discord_id = ?", (discord_id,)
         ).fetchone()
+
+
+def delete_user(discord_id: str) -> bool:
+    """Delete the row for *discord_id*.  Returns ``True`` if a row was deleted."""
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "DELETE FROM users WHERE discord_id = ?", (discord_id,)
+        )
+        conn.commit()
+    return cursor.rowcount > 0

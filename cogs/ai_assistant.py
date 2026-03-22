@@ -2,6 +2,7 @@
 cogs/ai_assistant.py
 --------------------
 Slash commands:
+  /profile         – Show your current Skyblock stats as an embed.
   /ask <question>  – Ask the LLM a question in the context of your Skyblock stats.
   /advice          – Get three AI-generated next-step recommendations.
 """
@@ -60,6 +61,55 @@ class AIAssistant(commands.Cog):
         return context_block, minecraft_name
 
     # ------------------------------------------------------------------
+    # /profile
+    # ------------------------------------------------------------------
+
+    @app_commands.command(
+        name="profile",
+        description="登録済みのSkyblockステータスを表示します。",
+    )
+    async def profile(self, interaction: discord.Interaction) -> None:
+        """Display the user's current Skyblock stats without calling the LLM."""
+        await interaction.response.defer()
+
+        row = get_user(str(interaction.user.id))
+        if not row:
+            await interaction.followup.send(_NOT_REGISTERED_MSG)
+            return
+
+        minecraft_name: str = row["minecraft_name"]
+        uuid: str = row["minecraft_uuid"]
+
+        try:
+            ctx = await fetch_skyblock_context(uuid)
+        except Exception as exc:
+            logger.error("SkyCrypt API error in /profile: %s", exc)
+            await interaction.followup.send(
+                "⚠️ Skyblockのデータ取得中にエラーが発生しました。しばらくしてから再試行してください。"
+            )
+            return
+
+        slayers = ctx.get("slayers", {})
+        slayer_lines = "\n".join(
+            f"　・{boss}: Lv {level}" for boss, level in slayers.items()
+        )
+
+        embed = discord.Embed(
+            title=f"🧑‍🚀 {discord.utils.escape_markdown(minecraft_name)} のプロフィール",
+            color=discord.Color.teal(),
+        )
+        embed.add_field(name="プロファイル", value=ctx["profile_name"], inline=True)
+        embed.add_field(name="Skyblock Level", value=str(ctx["skyblock_level"]), inline=True)
+        embed.add_field(name="Skill Average", value=str(ctx["skill_average"]), inline=True)
+        embed.add_field(name="Catacombs Level", value=str(ctx["catacombs_level"]), inline=True)
+        embed.add_field(name="Magical Power", value=str(ctx["magical_power"]), inline=True)
+        embed.add_field(name="Armor", value=ctx["armor"], inline=False)
+        embed.add_field(name="Weapon", value=ctx["weapon"], inline=False)
+        embed.add_field(name="Slayer", value=slayer_lines or "N/A", inline=False)
+        embed.set_footer(text="SkyCopilot AI Assistant")
+        await interaction.followup.send(embed=embed)
+
+    # ------------------------------------------------------------------
     # /ask
     # ------------------------------------------------------------------
 
@@ -68,6 +118,7 @@ class AIAssistant(commands.Cog):
         description="Skyblockに関する質問をAIアシスタントに聞きます。",
     )
     @app_commands.describe(question="AIに聞きたいこと（例: 「次に強化すべきスキルは？」）")
+    @app_commands.checks.cooldown(1, 30.0, key=lambda i: i.user.id)
     async def ask(self, interaction: discord.Interaction, question: str) -> None:
         """Ask the LLM a question, with the user's stats as context."""
         await interaction.response.defer()
@@ -114,6 +165,7 @@ class AIAssistant(commands.Cog):
         name="advice",
         description="現在のSkyblockの状況から、次にやるべきおすすめタスクを3つ提案します。",
     )
+    @app_commands.checks.cooldown(1, 60.0, key=lambda i: i.user.id)
     async def advice(self, interaction: discord.Interaction) -> None:
         """Ask the LLM for three next-step recommendations based on the user's stats."""
         await interaction.response.defer()
@@ -157,6 +209,28 @@ class AIAssistant(commands.Cog):
         )
         embed.set_footer(text="SkyCopilot AI Assistant")
         await interaction.followup.send(embed=embed)
+
+    # ------------------------------------------------------------------
+    # Error handlers
+    # ------------------------------------------------------------------
+
+    async def cog_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        if isinstance(error, app_commands.CommandOnCooldown):
+            retry = round(error.retry_after)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    f"⏳ コマンドはクールダウン中です。あと **{retry}秒** 後に再試行してください。",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.followup.send(
+                    f"⏳ コマンドはクールダウン中です。あと **{retry}秒** 後に再試行してください。",
+                    ephemeral=True,
+                )
 
 
 async def setup(bot: commands.Bot) -> None:
