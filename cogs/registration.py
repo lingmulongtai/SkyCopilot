@@ -13,7 +13,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from utils.database import upsert_user
+from utils.database import upsert_user, delete_user
 from utils.skyblock_api import fetch_uuid
 
 logger = logging.getLogger(__name__)
@@ -80,6 +80,36 @@ class Registration(commands.Cog):
         )
         embed.add_field(name="UUID", value=uuid, inline=False)
         await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="unregister",
+        description="登録済みのMinecraft IDを削除します。",
+    )
+    async def unregister(self, interaction: discord.Interaction) -> None:
+        """Remove the caller's Minecraft registration."""
+        await interaction.response.defer(ephemeral=True)
+
+        discord_id = str(interaction.user.id)
+        try:
+            removed = delete_user(discord_id)
+        except Exception as exc:
+            logger.error("Database error during /unregister: %s", exc)
+            await interaction.followup.send(
+                "⚠️ データベースの操作中にエラーが発生しました。",
+                ephemeral=True,
+            )
+            return
+
+        if removed:
+            await interaction.followup.send(
+                "✅ 登録を削除しました。再び使うには `/register` で再登録してください。",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                "❌ まだ登録されていません。",
+                ephemeral=True,
+            )
 
 
 async def setup(bot: commands.Bot) -> None:

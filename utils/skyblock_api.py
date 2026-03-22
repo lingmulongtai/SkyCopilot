@@ -36,6 +36,8 @@ _SLAYER_TARGETS = {
     "spider": "Spider",
     "wolf": "Wolf",
     "enderman": "Enderman",
+    "blaze": "Blaze",
+    "vampire": "Vampire",
 }
 
 
@@ -241,7 +243,14 @@ def _empty_context() -> dict[str, Any]:
         "magical_power": "N/A",
         "armor": "N/A",
         "weapon": "N/A",
-        "slayers": {"Zombie": "N/A", "Spider": "N/A", "Wolf": "N/A", "Enderman": "N/A"},
+        "slayers": {
+            "Zombie": "N/A",
+            "Spider": "N/A",
+            "Wolf": "N/A",
+            "Enderman": "N/A",
+            "Blaze": "N/A",
+            "Vampire": "N/A",
+        },
     }
 
 
