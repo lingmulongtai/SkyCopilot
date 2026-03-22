@@ -12,11 +12,11 @@ import logging
 import discord
 from discord import app_commands
 from discord.ext import commands
-from openai import RateLimitError, APITimeoutError
 
 from utils.database import get_user
 from utils.skyblock_api import fetch_skyblock_context, format_context_for_prompt
 from utils.llm import ask_llm
+from utils.llm_router import LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -132,14 +132,9 @@ class AIAssistant(commands.Cog):
 
         try:
             answer = await ask_llm(user_message=question, stats_context=context_block)
-        except RateLimitError:
+        except LLMUnavailableError:
             await interaction.followup.send(
-                "⚠️ AIのレートリミットに達しました。少し待ってから再試行してください。"
-            )
-            return
-        except APITimeoutError:
-            await interaction.followup.send(
-                "⚠️ AIへのリクエストがタイムアウトしました。再試行してください。"
+                "⚠️ AIサービスが一時的に利用できません。少し待ってから再試行してください。"
             )
             return
         except Exception as exc:
@@ -185,14 +180,9 @@ class AIAssistant(commands.Cog):
 
         try:
             answer = await ask_llm(user_message=advice_prompt, stats_context=context_block)
-        except RateLimitError:
+        except LLMUnavailableError:
             await interaction.followup.send(
-                "⚠️ AIのレートリミットに達しました。少し待ってから再試行してください。"
-            )
-            return
-        except APITimeoutError:
-            await interaction.followup.send(
-                "⚠️ AIへのリクエストがタイムアウトしました。再試行してください。"
+                "⚠️ AIサービスが一時的に利用できません。少し待ってから再試行してください。"
             )
             return
         except Exception as exc:
