@@ -20,14 +20,14 @@ import os
 from utils.llm_format import SYSTEM_PROMPT, enforce_format
 from utils.llm_providers.gemini_provider import GeminiProvider
 from utils.llm_providers.groq_provider import GroqProvider
-from utils.llm_providers.openai_provider import OpenAIProvider
+from utils.llm_providers.openrouter_provider import OpenRouterProvider
 from utils.llm_router import LLMRouter
 
 logger = logging.getLogger(__name__)
 
 # Registry of provider name → class.  Add new providers here.
 _PROVIDER_REGISTRY = {
-    "openai": OpenAIProvider,
+    "openrouter": OpenRouterProvider,
     "gemini": GeminiProvider,
     "groq": GroqProvider,
 }
@@ -38,7 +38,7 @@ _router: LLMRouter | None = None
 
 def _build_router() -> LLMRouter:
     """Construct an :class:`~utils.llm_router.LLMRouter` from env vars."""
-    order_raw = os.environ.get("LLM_PROVIDER_ORDER", "openai")
+    order_raw = os.environ.get("LLM_PROVIDER_ORDER", "openrouter")
     names = [n.strip().lower() for n in order_raw.split(",") if n.strip()]
 
     providers = []
@@ -60,7 +60,7 @@ def _build_router() -> LLMRouter:
     if not providers:
         raise EnvironmentError(
             "No LLM providers are configured.  "
-            "Set at least one of OPENAI_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY "
+            "Set at least one of OPENROUTER_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY "
             "and include the corresponding name in LLM_PROVIDER_ORDER."
         )
 
@@ -84,7 +84,7 @@ async def ask_llm(
     user_message: str,
     stats_context: str,
     *,
-    model: str | None = None,  # kept for backward compatibility; ignored (set OPENAI_MODEL instead)
+    model: str | None = None,  # kept for backward compatibility; ignored (set OPENROUTER_MODEL instead)
     max_tokens: int = 1024,
 ) -> str:
     """Send *user_message* plus *stats_context* to the LLM and return the reply.
@@ -97,7 +97,7 @@ async def ask_llm(
         A formatted block describing the player's current Skyblock stats.
     model:
         Accepted for backward compatibility but **ignored**.
-        To control the model, set the ``OPENAI_MODEL`` / ``GEMINI_MODEL`` /
+        To control the model, set the ``OPENROUTER_MODEL`` / ``GEMINI_MODEL`` /
         ``GROQ_MODEL`` environment variables instead.
     max_tokens:
         Maximum tokens for the completion response.
