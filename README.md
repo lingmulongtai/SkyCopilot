@@ -47,7 +47,7 @@ SkyCopilot/
 │   ├── llm_router.py              # Fallback routing, per-provider retry, circuit breaker
 │   └── llm_providers/
 │       ├── base.py                # LLMProvider ABC + RetryableError exception
-│       ├── openai_provider.py     # OpenAI Chat Completions (gpt-4o-mini default)
+│       ├── openrouter_provider.py # OpenRouter Chat Completions (openai/gpt-4o-mini default)
 │       ├── gemini_provider.py     # Google Gemini REST API (gemini-1.5-flash default)
 │       └── groq_provider.py       # Groq API — OpenAI-compatible (llama3-8b-8192 default)
 │
@@ -64,7 +64,7 @@ When a command triggers an LLM call, the following sequence runs:
 ```
 ask_llm()
   └─► LLMRouter.chat()
-        ├─► Provider 1 (e.g. OpenAI)
+        ├─► Provider 1 (e.g. OpenRouter)
         │     ├─ attempt 1 → HTTP 429 → exponential back-off → retry
         │     ├─ attempt 2 → HTTP 429 → exponential back-off → retry
         │     └─ attempt 3 → HTTP 429 → circuit breaker records failure → NEXT PROVIDER
@@ -83,7 +83,7 @@ The circuit breaker opens after `LLM_CB_FAILURE_THRESHOLD` consecutive failures 
 
 - **Python 3.10 or later**
 - A [Discord application](https://discord.com/developers/applications) with a bot token and the `applications.commands` OAuth2 scope enabled
-- At least one LLM API key (OpenAI, Google AI Studio, or Groq — all have free tiers)
+- At least one LLM API key (OpenRouter, Google AI Studio, or Groq — all have free tiers)
 
 ### 1. Install Dependencies
 
@@ -109,8 +109,8 @@ Open `.env` and fill in your credentials. The only strictly required variable is
 
 | Variable | Description | Free Tier |
 |---|---|---|
-| `OPENAI_API_KEY` | [OpenAI API key](https://platform.openai.com/api-keys) | Trial credit for new accounts |
-| `OPENAI_MODEL` | Model name (default: `gpt-4o-mini`) | — |
+| `OPENROUTER_API_KEY` | [OpenRouter API key](https://openrouter.ai/keys) | Many free models (e.g. `meta-llama/llama-3-8b-instruct:free`) |
+| `OPENROUTER_MODEL` | Model name (default: `openai/gpt-4o-mini`) | — |
 | `GEMINI_API_KEY` | [Google AI Studio key](https://aistudio.google.com/app/apikey) | Generous RPM/RPD limits with `gemini-1.5-flash` |
 | `GEMINI_MODEL` | Model name (default: `gemini-1.5-flash`) | — |
 | `GROQ_API_KEY` | [Groq API key](https://console.groq.com/keys) | Rate-limited free access to open-source models |
@@ -119,8 +119,8 @@ Open `.env` and fill in your credentials. The only strictly required variable is
 #### Provider Order and Routing
 
 ```bash
-# .env — try OpenAI first, fall back to Gemini, then Groq
-LLM_PROVIDER_ORDER=openai,gemini,groq
+# .env — try OpenRouter first, fall back to Gemini, then Groq
+LLM_PROVIDER_ORDER=openrouter,gemini,groq
 ```
 
 Providers not listed in `LLM_PROVIDER_ORDER`, or whose API key is missing, are silently skipped. The bot works perfectly with a single configured provider; extra providers only improve resilience.
@@ -216,7 +216,7 @@ SkyCopilot extracts the following fields from the SkyCrypt API response and inje
 |---|---|
 | Discord integration | [discord.py 2.3+](https://discordpy.readthedocs.io/) with application commands |
 | HTTP client | [aiohttp 3.9+](https://docs.aiohttp.org/) (async, with retry + timeout) |
-| LLM – OpenAI | [openai 1.0+](https://github.com/openai/openai-python) SDK |
+| LLM – OpenRouter | [OpenRouter](https://openrouter.ai/) REST API (via aiohttp) — routes to 200+ models |
 | LLM – Gemini | Google AI Studio REST API (via aiohttp) |
 | LLM – Groq | OpenAI-compatible REST API (via aiohttp) |
 | Database | SQLite via the Python standard library (`sqlite3`) |
