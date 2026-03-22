@@ -1,7 +1,11 @@
 """
 utils/llm.py
 ------------
-Thin async wrapper around the OpenAI Chat Completions API.
+Multi-provider LLM gateway for the Discord bot.
+
+``ask_llm`` is the single public entry-point used by cogs.  Internally it
+delegates to :mod:`utils.llm_router` which handles provider selection,
+retries, exponential back-off, and circuit breaking.
 
 Usage
 -----
@@ -13,34 +17,77 @@ response_text = await ask_llm(user_message="...", stats_context="...")
 import logging
 import os
 
-from openai import AsyncOpenAI, RateLimitError, APITimeoutError, APIStatusError
+from utils.llm_format import SYSTEM_PROMPT, enforce_format
+from utils.llm_providers.gemini_provider import GeminiProvider
+from utils.llm_providers.groq_provider import GroqProvider
+from utils.llm_providers.openai_provider import OpenAIProvider
+from utils.llm_router import LLMRouter
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """\
-あなたは親身で優秀なHypixel Skyblockの専属サポーターです。
-ユーザーの現在のステータス（後述）を考慮し、背伸びしすぎない現実的で具体的なアドバイスを提供してください。
-回答は日本語で、Discord上で読みやすいようにMarkdownを活用して簡潔にまとめてください。
-"""
+# Registry of provider name → class.  Add new providers here.
+_PROVIDER_REGISTRY = {
+    "openai": OpenAIProvider,
+    "gemini": GeminiProvider,
+    "groq": GroqProvider,
+}
+
+# Module-level router singleton; reset with _reset_router() in tests.
+_router: LLMRouter | None = None
 
 
-def _get_client() -> AsyncOpenAI:
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("OPENAI_API_KEY environment variable is not set.")
-    return AsyncOpenAI(api_key=api_key)
+def _build_router() -> LLMRouter:
+    """Construct an :class:`~utils.llm_router.LLMRouter` from env vars."""
+    order_raw = os.environ.get("LLM_PROVIDER_ORDER", "openai")
+    names = [n.strip().lower() for n in order_raw.split(",") if n.strip()]
+
+    providers = []
+    for name in names:
+        cls = _PROVIDER_REGISTRY.get(name)
+        if cls is None:
+            logger.warning(
+                "Unknown provider %r in LLM_PROVIDER_ORDER – skipping", name
+            )
+            continue
+        provider = cls()
+        if not provider.is_configured():
+            logger.info(
+                "Provider %s has no API key configured – skipping", name
+            )
+            continue
+        providers.append(provider)
+
+    if not providers:
+        raise EnvironmentError(
+            "No LLM providers are configured.  "
+            "Set at least one of OPENAI_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY "
+            "and include the corresponding name in LLM_PROVIDER_ORDER."
+        )
+
+    return LLMRouter(providers)
+
+
+def _get_router() -> LLMRouter:
+    global _router
+    if _router is None:
+        _router = _build_router()
+    return _router
+
+
+def _reset_router() -> None:
+    """Reset the cached router singleton (useful in tests)."""
+    global _router
+    _router = None
 
 
 async def ask_llm(
     user_message: str,
     stats_context: str,
     *,
-    model: str | None = None,
+    model: str | None = None,  # kept for backward compatibility; ignored (set OPENAI_MODEL instead)
     max_tokens: int = 1024,
 ) -> str:
-    """
-    Send *user_message* plus *stats_context* to the LLM and return the
-    assistant's reply as a plain string.
+    """Send *user_message* plus *stats_context* to the LLM and return the reply.
 
     Parameters
     ----------
@@ -49,13 +96,17 @@ async def ask_llm(
     stats_context:
         A formatted block describing the player's current Skyblock stats.
     model:
-        Override the model (defaults to the ``OPENAI_MODEL`` env var or
-        ``gpt-4o-mini``).
+        Accepted for backward compatibility but **ignored**.
+        To control the model, set the ``OPENAI_MODEL`` / ``GEMINI_MODEL`` /
+        ``GROQ_MODEL`` environment variables instead.
     max_tokens:
         Maximum tokens for the completion response.
-    """
-    chosen_model = model or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
+    Raises
+    ------
+    utils.llm_router.LLMUnavailableError
+        When every configured provider has been exhausted.
+    """
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -64,21 +115,6 @@ async def ask_llm(
         },
     ]
 
-    client = _get_client()
-    try:
-        response = await client.chat.completions.create(
-            model=chosen_model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=0.7,
-        )
-        return response.choices[0].message.content or ""
-    except RateLimitError:
-        logger.warning("OpenAI rate limit reached")
-        raise
-    except APITimeoutError:
-        logger.warning("OpenAI request timed out")
-        raise
-    except APIStatusError as exc:
-        logger.error("OpenAI API error: %s", exc)
-        raise
+    router = _get_router()
+    raw = await router.chat(messages, max_tokens)
+    return enforce_format(raw)
